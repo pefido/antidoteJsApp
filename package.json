@@ -1,0 +1,16 @@
+{
+  "name": "antidotejsapp",
+  "version": "1.0.0",
+  "description": "antidote client for node.js",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "hapi": "^13.3.0",
+    "inert": "^3.2.0",
+    "protobufjs": "^5.0.1"
+  }
+}

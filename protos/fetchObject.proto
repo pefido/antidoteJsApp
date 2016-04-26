@@ -1,0 +1,52 @@
+package riakProto;
+
+message RpbGetReq {
+    required bytes bucket = 1;
+    required bytes key = 2;
+    optional uint32 r = 3;
+    optional uint32 pr = 4;
+    optional bool basic_quorum = 5;
+    optional bool notfound_ok = 6;
+    optional bytes if_modified = 7;
+    optional bool head = 8;
+    optional bool deletedvclock = 9;
+    optional uint32 timeout = 10;
+    optional bool sloppy_quorum = 11;
+    optional uint32 n_val = 12;
+    optional bytes type = 13;
+}
+
+message RpbGetResp {
+    repeated RpbContent content = 1;
+    optional bytes vclock = 2;
+    optional bool unchanged = 3;
+}
+
+message RpbLink {
+    optional bytes bucket = 1;
+    optional bytes key = 2;
+    optional bytes tag = 3;
+}
+
+message RpbContent {
+    required bytes value = 1;
+    optional bytes content_type = 2;
+    optional bytes charset = 3;
+    optional bytes content_encoding = 4;
+    optional bytes vtag = 5;
+    repeated RpbLink links = 6;
+    optional uint32 last_mod = 7;
+    optional uint32 last_mod_usecs = 8;
+    repeated RpbPair usermeta = 9;
+    repeated RpbPair indexes = 10;
+    optional bool deleted = 11;
+}
+
+message RpbPair {
+    required bytes key = 1;
+    optional bytes value = 2;
+}
+
+message RpbPingReq {}
+
+message RpbPingResp {}
