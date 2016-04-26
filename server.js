@@ -379,7 +379,6 @@ server.route({
         decoded = ApbOperationResp.decode(protobufResp);
         console.log(decoded);
         return reply(decoded);
-
       }
       else if(respNumber == 127) {
         decoded = ApbCommitResp.decode(protobufResp);
