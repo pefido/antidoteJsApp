@@ -260,19 +260,12 @@ server.route({
       }
       else if(respNumber == 126) {
         decoded = ApbReadObjectsResp.decode(protobufResp);
-        console.log(decoded);
-        return reply(decoded);
       }
       else if(respNumber == 128) {
         decoded = ApbStaticReadObjectsResp.decode(protobufResp);
-        console.log(decoded);
-        return reply(decoded);
-
       }
-
-
-
-      //client.destroy(); // kill client after server's response
+      return reply(decoded);
+      client.destroy(); // kill client after server's response
     });
 
     client.on('close', function() {
@@ -377,16 +370,13 @@ server.route({
       }
       else if(respNumber == 111) {
         decoded = ApbOperationResp.decode(protobufResp);
-        console.log(decoded);
-        return reply(decoded);
       }
       else if(respNumber == 127) {
         decoded = ApbCommitResp.decode(protobufResp);
-        console.log(decoded);
-        return reply(decoded);
       }
 
-      //client.destroy(); // kill client after server's response
+      return reply(decoded);
+      client.destroy(); // kill client after server's response
     });
 
     client.on('close', function() {
@@ -439,27 +429,14 @@ server.route({
   path: '/fetchObjectProto/{bType}/{bucket}/{key}',
   handler: function (request, reply) {
     var ByteBuffer = ProtoBuf.ByteBuffer;
-    var Long = ProtoBuf.Long;
-    var builder = ProtoBuf.loadProtoFile("protos/fetchObject.proto");
-    var riakProto = builder.build("riakProto");
-    var RpbGetReq = riakProto.RpbGetReq;
-    var RpbGetResp = riakProto.RpbGetResp;
-    var RpbContent = riakProto.RpbContent;
-
-    /*var message = {
-      bucket: ByteBuffer.wrap(request.params.bucket),
-      key: ByteBuffer.wrap(request.params.key),
-      bucketType: ByteBuffer.wrap(request.params.bType)
-    };
-
-    var request1 = new riakRequest({
-      "bucket": message.bucket,
-      "key": message.key,
-      "type": message.bucketType
-    });*/
+    var builder = ProtoBuf.loadProtoFile("protos/riak_kv.proto");
+    var builder2 = ProtoBuf.loadProtoFile("protos/riak.proto");
+    var RpbErrorResp = builder2.build("RpbErrorResp");
+    var RpbGetReq = builder.build("RpbGetReq");
+    var RpbGetResp = builder.build("RpbGetResp");
 
     var getRequest = new RpbGetReq({
-      bucket : ByteBuffer.fromUTF8(request.params.bucket) ,
+      bucket : ByteBuffer.fromBinary(Bert.encode(Bert.binary("bucket"))) ,
       key : ByteBuffer.fromUTF8(request.params.key),
       type : ByteBuffer.fromUTF8(request.params.bType)
     });
@@ -468,17 +445,14 @@ server.route({
 
     //header que é preciso mas que não faço ideia do que faz
     var header = new Buffer(5);
-    header.writeUInt8(9, 4);
+    header.writeUInt8(9, 4);//1º number is the operation code
     header.writeInt32BE(encoded.length + 1, 0);
+
 
     var message = {
       protobuf: encoded,
       header: header
     };
-
-    //var pingReq = new RpbPingReq();
-
-    //var buffer = request.encode();
 
     var client = net.connect({port: 8087},
       function() { //'connect' listener
@@ -488,11 +462,22 @@ server.route({
 
     client.on('data', function(data) {
       console.log("data");
+
       var headerResp = data.slice(0, 5);
+      var respNumber = headerResp.readUInt8(4);
+      console.log(respNumber);
       var protobufResp = data.slice(5, data.length);
-      var decoded = RpbGetResp.decode(protobufResp);
-      //var content = RpbContent.decode(decoded.content);
-      console.log(decoded.content[0].value.toUTF8());
+
+      if(respNumber == 0) {
+        decoded = RpbErrorResp.decode(protobufResp);
+        return reply(decoded.errmsg.toUTF8());
+      }
+      else if(respNumber == 10) {
+        var decoded = RpbGetResp.decode(protobufResp);
+        //var content = RpbContent.decode(decoded.content);
+        console.log(decoded.content[0].value.toUTF8());
+      }
+
       return reply(decoded.content[0].value.toUTF8());
       client.destroy(); // kill client after server's response
     });
