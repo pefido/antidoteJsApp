@@ -538,6 +538,26 @@ server.route({
 });
 
 server.route({
+  method: 'GET',
+  path: '/fetchSetProto/{key}',
+  handler: function (request, reply) {
+    var ByteBuffer = ProtoBuf.ByteBuffer;
+    var builder = ProtoBuf.loadProtoFile("protos/antidote.proto");
+    var builder2 = ProtoBuf.loadProtoFile("protos/riak.proto");
+    var RpbErrorResp = builder2.build("RpbErrorResp");
+    var ApbStaticReadObjects = builder.build("ApbStaticReadObjects");
+    var ApbStartTransaction = builder.build("ApbStartTransaction");
+    var ApbBoundObject = builder.build("ApbBoundObject");
+    var ApbStaticReadObjectsResp = builder.build("ApbStaticReadObjectsResp");
+
+    var header = new Buffer(5);
+    header.writeUInt8(9, 4);//1º number is the operation code
+    header.writeInt32BE(encoded.length + 1, 0);
+
+  }
+});
+
+server.route({
   method: 'POST',
   path: '/createSet',
   handler: function (request, reply) {
