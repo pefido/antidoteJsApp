@@ -105,6 +105,7 @@ message ApbStaticUpdateObjects{
 message ApbStaticReadObjects{
 	required ApbStartTransaction transaction = 1;
 	repeated ApbBoundObject objects = 2;
+
 }
 
 //Start transaction response

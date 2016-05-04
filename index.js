@@ -145,6 +145,38 @@ function incrementCounter(bType, bucket, key, increment){
   xhttp.send(data);
 }
 
+function incCounter(){
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (xhttp.readyState == 4 && xhttp.status == 200) {
+      console.log(xhttp.responseText);
+      //return xhttp.responseText;
+    }
+  };
+
+  var data = JSON.stringify({});
+
+  xhttp.open( "PUT", 'http://localhost:8000/incCounter', true);
+  xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+  xhttp.send(data);
+}
+
+function decCounter(){
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (xhttp.readyState == 4 && xhttp.status == 200) {
+      console.log(xhttp.responseText);
+      //return xhttp.responseText;
+    }
+  };
+
+  var data = JSON.stringify({});
+
+  xhttp.open( "PUT", 'http://localhost:8000/decCounter', true);
+  xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+  xhttp.send(data);
+}
+
 /**
  * increment/decrement counter
  * @param bType - doesnt matter
@@ -169,6 +201,27 @@ function incrementCounterProto(bType, bucket, key, increment){
   });
 
   xhttp.open( "PUT", 'http://localhost:8000/incrementCounterProto', true);
+  xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+  xhttp.send(data);
+}
+
+function decrementCounterProto(bType, bucket, key, increment){
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (xhttp.readyState == 4 && xhttp.status == 200) {
+      console.log(xhttp.responseText);
+      //return xhttp.responseText;
+    }
+  };
+
+  var data = JSON.stringify({
+    bType: bType,
+    bucket: bucket,
+    key: key,
+    increment: increment
+  });
+
+  xhttp.open( "PUT", 'http://localhost:8000/decrementCounterProto', true);
   xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
   xhttp.send(data);
 }
@@ -240,6 +293,22 @@ function fetchSet(bType, bucket, key) {
   var data = '/' + bType + '/' + bucket + '/' + key;
 
   xhttp.open( "GET", 'http://localhost:8000/fetchSet'+data, true);
+  xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+  xhttp.send();
+}
+
+function fetchSetProto(key) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (xhttp.readyState == 4 && xhttp.status == 200) {
+      console.log(xhttp.responseText);
+      //return xhttp.responseText;
+    }
+  };
+
+  var data = '/' + key;
+
+  xhttp.open( "GET", 'http://localhost:8000/fetchSetProto'+data, true);
   xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
   xhttp.send();
 }
