@@ -5,7 +5,7 @@ const Hapi = require('hapi');
 const ProtoBuf = require("protobufjs");
 const Bert = require('bert-js');
 var net = require("net");
-var zmq = require('zmq'), sock = zmq.socket('pub');
+//var zmq = require('zmq'), sock = zmq.socket('pub');
 
 var ByteBuffer = ProtoBuf.ByteBuffer;
 var Long = ProtoBuf.Long;
@@ -29,14 +29,13 @@ var ApbCounterUpdate = builder.build("ApbCounterUpdate");
 var ApbOperationResp = builder.build("ApbOperationResp");
 var ApbCommitResp = builder.build("ApbCommitResp");
 
-var client;
 var opQeueu = [];
 
 // Create a server with a host and port
 const server = new Hapi.Server();
 server.connection({
   host: 'localhost',
-  port: 8000,
+  port: 8088,
   routes: {
     cors: true
   }
@@ -46,7 +45,6 @@ server.connection({
 const nodes = [
   '127.0.0.1:8087'
 ];
-var client;
 
 server.register(require('inert'), (err) => {
 
@@ -66,9 +64,9 @@ server.register(require('inert'), (err) => {
   //get index.js script file
   server.route({
     method: 'GET',
-    path: '/index.js',
+    path: '/antidoteClient.js',
     handler: function (request, reply) {
-      reply.file('index.js');
+      reply.file('antidoteClient.js');
     }
   });
 
@@ -77,24 +75,6 @@ server.register(require('inert'), (err) => {
     path: '/JSMQ.js',
     handler: function (request, reply) {
       reply.file('JSMQ.js');
-    }
-  });
-
-  //ping riak server
-  server.route({
-    method: 'GET',
-    path: '/ping',
-    handler: function (request, reply) {
-      client.ping(function (err, rslt) {
-        if (err) {
-          throw new Error(err);
-        } else {
-          // On success, ping returns true
-          assert(rslt === true);
-          //console.log('pong');
-          return reply('pong');
-        }
-      });
     }
   });
 
@@ -120,7 +100,7 @@ server.register(require('inert'), (err) => {
         header: header
       };
 
-      var client = net.connect({port: 8087},
+      let client = net.connect({port: 8087},
         function() { //'connect' listener
           client.write(message.header);
           client.write(message.protobuf);
@@ -128,8 +108,10 @@ server.register(require('inert'), (err) => {
 
       client.on('data', function(data) {
         var headerResp = data.slice(0, 5);
+        let respNumber = headerResp.readUInt8(4);
+        console.log('data ' + respNumber);
         var protobufResp = data.slice(5, data.length);
-        if(RpbPingResp.decode(protobufResp)) {
+        if(respNumber == 2) {
           return reply('pong');
         }
       });
@@ -152,65 +134,8 @@ server.register(require('inert'), (err) => {
 /******************Counter Operations******************/
 
 server.route({
-  method: 'POST',
-  path: '/createCounter',
-  handler: function (request, reply) {
-    client.storeValue({
-        bucketType: request.payload.bType,
-        bucket: request.payload.bucket,
-        key: request.payload.key,
-        value: 0
-      },
-      function(err, rslt) {
-        if (err) {
-          throw new Error(err);
-        }
-        else return reply(rslt);
-      }
-    );
-  }
-});
-
-server.route({
-  method: 'PUT',
-  path: '/deleteCounter',
-  handler: function (request, reply) {
-    client.deleteValue({
-        bucketType: request.payload.bType,
-        bucket: request.payload.bucket,
-        key: request.payload.key
-      },
-      function (err, rslt) {
-        if (err) {
-          throw new Error(err);
-        }
-        else return reply(rslt);
-      });
-  }
-});
-
-server.route({
   method: 'GET',
-  path: '/fetchCounter/{bType}/{bucket}/{key}',
-  handler: function (request, reply) {
-    client.fetchCounter({
-        bucketType: request.params.bType,
-        bucket: request.params.bucket,
-        key: request.params.key
-      },
-      function(err, rslt) {
-        if (err) {
-          throw new Error(err);
-        }
-        else return reply(rslt);
-      }
-    );
-  }
-});
-
-server.route({
-  method: 'GET',
-  path: '/fetchCounterProto/{bType}/{bucket}/{key}',
+  path: '/fetchCounterProto/{key}',
   handler: function (request, reply) {
 
     var startTransaction = new ApbStartTransaction({
@@ -238,45 +163,34 @@ server.route({
       protobuf: encoded
     }
 
-        client.write(message.header);
-        client.write(message.protobuf);
+    let client = net.connect({port: 8087});
+    client.write(message.header);
+    client.write(message.protobuf);
 
     client.on('data', function(data) {
-      console.log("data");
       var headerResp = data.slice(0, 5);
       var respNumber = headerResp.readUInt8(4);
-      console.log(respNumber);
+      console.log('data ' + respNumber);
       var protobufResp = data.slice(5, data.length);
       var decoded;
       if(respNumber == 0) {
         decoded = RpbErrorResp.decode(protobufResp);
-        return decoded.errmsg.toUTF8();
+        reply(decoded.errmsg.toUTF8());
       }
       else if(respNumber == 128) {
         decoded = ApbStaticReadObjectsResp.decode(protobufResp);
         reply(decoded);
       }
+      client.destroy();
     });
-  }
-});
 
-server.route({
-  method: 'PUT',
-  path: '/incrementCounter',
-  handler: function (request, reply) {
-    client.updateCounter({
-        bucketType: request.payload.bType,
-        bucket: request.payload.bucket,
-        key: request.payload.key,
-        increment: request.payload.increment
-      },
-      function(err, rslt) {
-        if (err) {
-          throw new Error(err);
-        }
-        else return reply(rslt);
-      }
-    );
+    client.on('close', function() {
+      console.log('Connection closed');
+    });
+
+    client.on('error', function() {
+      console.log('error');
+    });
   }
 });
 
@@ -302,7 +216,80 @@ server.route({
   method: 'PUT',
   path: '/incrementCounterProto',
   handler: function (request, reply) {
-    return reply(incCounter(request.payload.key));
+    var startTransaction = new ApbStartTransaction({
+      timestamp: ByteBuffer.fromBinary(Bert.encode(Bert.atom("ignore")))
+    });
+
+    var antidoteObj = new ApbBoundObject({
+      key: ByteBuffer.fromUTF8(request.payload.key),
+      type: 0,
+      bucket: ByteBuffer.fromBinary(Bert.encode(Bert.binary("bucket")))
+    });
+
+    var counterOp = new ApbCounterUpdate({
+      optype: 1,
+      inc: request.payload.increment
+    });
+
+    var updateOp = new ApbUpdateOp({
+      boundobject: antidoteObj,
+      optype: 1,
+      counterop: counterOp
+    });
+
+    var staticUpdate = new ApbStaticUpdateObjects({
+      transaction: startTransaction,
+      updates: updateOp
+    });
+
+    var encoded = staticUpdate.encode().toBuffer();
+
+    var header = new Buffer(5);
+    header.writeUInt8(122, 4);//1º number is the operation code
+    header.writeInt32BE(encoded.length + 1, 0);
+
+    var message = {
+      header: header,
+      protobuf: encoded
+    }
+
+    let client = net.connect({port: 8087});
+    client.write(message.header);
+    client.write(message.protobuf);
+
+    client.on('data', function(data) {
+      var headerResp = data.slice(0, 5);
+      var respNumber = headerResp.readUInt8(4);
+      console.log('data ' + respNumber);
+      var protobufResp = data.slice(5, data.length);
+      var decoded;
+      if(respNumber == 0) {
+        decoded = RpbErrorResp.decode(protobufResp);
+        return decoded.errmsg.toUTF8();
+      }
+      else if(respNumber == 111) {
+        decoded = ApbOperationResp.decode(protobufResp);
+      }
+      else if(respNumber == 127) {
+
+        decoded = ApbCommitResp.decode(protobufResp);
+        //console.log(decoded);
+      }
+      else if(respNumber == 128) {
+        decoded = ApbStaticReadObjectsResp.decode(protobufResp);
+      }
+      //console.log(decoded);
+      client.destroy();
+      return reply(decoded);
+    });
+
+    client.on('close', function() {
+      console.log('Connection closed');
+    });
+
+    client.on('error', function() {
+      console.log('error');
+    });
   }
 });
 
@@ -310,41 +297,80 @@ server.route({
   method: 'PUT',
   path: '/decrementCounterProto',
   handler: function (request, reply) {
-    return reply(decCounter(request.payload.key));
-  }
-});
+    var startTransaction = new ApbStartTransaction({
+      timestamp: ByteBuffer.fromBinary(Bert.encode(Bert.atom("ignore")))
+    });
 
-server.route({
-  method: 'GET',
-  path: '/fetchObject/{bType}/{bucket}/{key}',
-  handler: function (request, reply) {
-    var riakObj = new Riak.Commands.KV.RiakObject();
-    riakObj.setContentType('application/riak_counter');
-    client.fetchValue({
-        bucketType: request.params.bType,
-        bucket: request.params.bucket,
-        key: request.params.key
-      },
-      function(err, rslt) {
-        if (err) {
-          throw new Error(err);
-        }
-        else {
-          //Bert.convention = Bert.ELIXIR;
-          //Bert.all_binaries_as_string = true;
-          //var tmp = rslt.values[0].getValue();
-          //var str = JSON.stringify(tmp);
-          //var strObj = JSON.parse(str);
-          //var S = Bert.bytes_to_string(strObj.data);
+    var antidoteObj = new ApbBoundObject({
+      key: ByteBuffer.fromUTF8(request.payload.key),
+      type: 0,
+      bucket: ByteBuffer.fromBinary(Bert.encode(Bert.binary("bucket")))
+    });
 
-          var riakObj = rslt.values[0];
-          var value = riakObj.value.toString("utf-8");
-          //var convert = Bert.bytes_to_string(JSON.parse(JSON.stringify(riakObj.value)).data);
-          //var convert2 = Bert.decode(convert);
-          return reply(value);
-        }
+    var counterOp = new ApbCounterUpdate({
+      optype: 2,
+      dec: request.payload.decrement
+    });
+
+    var updateOp = new ApbUpdateOp({
+      boundobject: antidoteObj,
+      optype: 1,
+      counterop: counterOp
+    });
+
+    var staticUpdate = new ApbStaticUpdateObjects({
+      transaction: startTransaction,
+      updates: updateOp
+    });
+
+    var encoded = staticUpdate.encode().toBuffer();
+
+    var header = new Buffer(5);
+    header.writeUInt8(122, 4);//1º number is the operation code
+    header.writeInt32BE(encoded.length + 1, 0);
+
+    var message = {
+      header: header,
+      protobuf: encoded
+    }
+
+    let client = net.connect({port: 8087});
+    client.write(message.header);
+    client.write(message.protobuf);
+
+    client.on('data', function(data) {
+      var headerResp = data.slice(0, 5);
+      var respNumber = headerResp.readUInt8(4);
+      console.log('data ' + respNumber);
+      var protobufResp = data.slice(5, data.length);
+      var decoded;
+      if(respNumber == 0) {
+        decoded = RpbErrorResp.decode(protobufResp);
+        return decoded.errmsg.toUTF8();
       }
-    );
+      else if(respNumber == 111) {
+        decoded = ApbOperationResp.decode(protobufResp);
+      }
+      else if(respNumber == 127) {
+
+        decoded = ApbCommitResp.decode(protobufResp);
+        //console.log(decoded);
+      }
+      else if(respNumber == 128) {
+        decoded = ApbStaticReadObjectsResp.decode(protobufResp);
+      }
+      //console.log(decoded);
+      client.destroy();
+      return reply(decoded);
+    });
+
+    client.on('close', function() {
+      console.log('Connection closed');
+    });
+
+    client.on('error', function() {
+      console.log('error');
+    });
   }
 });
 
@@ -378,7 +404,7 @@ server.route({
       header: header
     };
 
-    var client = net.connect({port: 8087},
+    let client = net.connect({port: 8087},
       function() { //'connect' listener
         client.write(message.header);
         client.write(message.protobuf);
@@ -415,50 +441,7 @@ server.route({
   }
 });
 
-server.route({
-  method: 'POST',
-  path: '/createObject',
-  handler: function (request, reply) {
-    var riakObj = new Riak.Commands.KV.RiakObject();
-    riakObj.setContentType('text/plain');
-    riakObj.setValue(request.payload.value);
-
-    client.storeValue({
-        bucketType: request.payload.bType,
-        bucket: request.payload.bucket,
-        key: request.payload.key,
-        value: riakObj
-      },
-      function(err, rslt) {
-        if (err) {
-          throw new Error(err);
-        }
-        else return reply(rslt);
-      }
-    );
-  }
-});
-
 /******************Set Operations******************/
-
-server.route({
-  method: 'GET',
-  path: '/fetchSet/{bType}/{bucket}/{key}',
-  handler: function (request, reply) {
-    client.fetchSet({
-        bucketType: request.params.bType,
-        bucket: request.params.bucket,
-        key: request.params.key
-      },
-      function(err, rslt) {
-        if (err) {
-          throw new Error(err);
-        }
-        else return reply(rslt);
-      }
-    );
-  }
-});
 
 server.route({
   method: 'GET',
@@ -497,9 +480,9 @@ server.route({
     var message = {
       header: header,
       protobuf: encoded
-    }
+    };
 
-    var client = net.connect({port: 8087},
+    let client = net.connect({port: 8087},
       function() { //'connect' listener
         client.write(message.header);
         client.write(message.protobuf);
@@ -538,47 +521,11 @@ server.route({
   }
 });
 
-server.route({
-  method: 'POST',
-  path: '/createSet',
-  handler: function (request, reply) {
-    client.storeValue({
-        bucketType: request.payload.bType,
-        bucket: request.payload.bucket,
-        key: request.payload.key,
-        value: []
-      },
-      function(err, rslt) {
-        if (err) {
-          throw new Error(err);
-        }
-        else return reply(rslt);
-      }
-    );
-  }
-});
 
-server.route({
-  method: 'PUT',
-  path: '/addToSet',
-  handler: function (request, reply) {
-    client.updateSet({
-        bucketType: request.payload.bType,
-        bucket: request.payload.bucket,
-        key: request.payload.key,
-        additions: request.payload.additions
-      },
-      function(err, rslt) {
-        if (err) {
-          throw new Error(err);
-        }
-        else return reply(rslt);
-      }
-    );
-  }
-});
+/****************************************************/
 
-function incCounter(key) {
+
+function incCounter(key, increment) {
 
   var startTransaction = new ApbStartTransaction({
     timestamp: ByteBuffer.fromBinary(Bert.encode(Bert.atom("ignore")))
@@ -592,7 +539,7 @@ function incCounter(key) {
 
   var counterOp = new ApbCounterUpdate({
     optype: 1,
-    inc: 1
+    inc: increment
   });
 
   var updateOp = new ApbUpdateOp({
@@ -619,6 +566,7 @@ function incCounter(key) {
 
   client.write(message.header);
   client.write(message.protobuf);
+
 }
 
 function decCounter(key) {
@@ -683,14 +631,7 @@ function propagateChanges() {
   //if(opQeueu.length != 0) {propagateChanges();}
 }
 
-// Start the server
-server.start((err) => {
-
-  if (err) {
-    throw err;
-  }
-  console.log('Server running at:', server.info.uri);
-  client = net.connect({port: 8087});
+function receiveData() {
   client.on('data', function(data) {
     console.log("data");
     var headerResp = data.slice(0, 5);
@@ -713,6 +654,7 @@ server.start((err) => {
     else if(respNumber == 128) {
       decoded = ApbStaticReadObjectsResp.decode(protobufResp);
     }
+    return decoded;
   });
 
   client.on('close', function() {
@@ -722,13 +664,23 @@ server.start((err) => {
   client.on('error', function() {
     console.log('error');
   });
+}
+
+// Start the server
+server.start((err) => {
+
+  if (err) {
+    throw err;
+  }
+  console.log('Server running at:', server.info.uri);
+
 
   //setInterval(propagateChanges ,7000);
-  sock.bindSync('tcp://127.0.0.1:3000');
-  console.log('Publisher bound to port 3000');
+  //sock.bindSync('tcp://127.0.0.1:3000');
+  //console.log('Publisher bound to port 3000');
 
-  setInterval(function(){
+  /*setInterval(function(){
     console.log('sending a multipart message envelope');
     sock.send(['kitty cats', 'meow!']);
-  }, 3000);
+  }, 3000);*/
 });
