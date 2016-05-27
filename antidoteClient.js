@@ -349,3 +349,77 @@ function addToSet(bType, bucket, key, additions) {
   xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
   xhttp.send(data);
 }
+
+/******************Object Operations******************/
+
+function getObjects(key, type) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (xhttp.readyState == 4 && xhttp.status == 200) {
+      let response = JSON.parse(xhttp.responseText);
+      console.log(response);
+      //return xhttp.responseText;
+    }
+  };
+
+  var data = '/' + key + '/' + type;
+
+  xhttp.open( "GET", 'http://localhost:8088/getObjects'+data, true);
+  xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+  xhttp.send();
+}
+
+function updateObjects(key, type, op, elements) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (xhttp.readyState == 4 && xhttp.status == 200) {
+      console.log(xhttp.responseText);
+      //return xhttp.responseText;
+    }
+  };
+
+  var data = JSON.stringify({
+    key: key,
+    type: type,
+    op: op,
+    elements: elements
+  });
+
+  xhttp.open( "PUT", 'http://localhost:8088/updateObjects', true);
+  xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+  xhttp.send(data);
+}
+
+/******************Log Operations******************/
+
+function getLogOps(key, type, timestamp) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (xhttp.readyState == 4 && xhttp.status == 200) {
+      console.log(xhttp.responseText);
+      //return xhttp.responseText;
+    }
+  };
+
+  var data = '/' + key + '/' + type + '/' + timestamp;
+
+  xhttp.open( "GET", 'http://localhost:8088/getLogOps'+data, true);
+  xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+  xhttp.send();
+}
+
+/******************Other Operations******************/
+
+function getLastCommitTimestamp() {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (xhttp.readyState == 4 && xhttp.status == 200) {
+      console.log(xhttp.responseText);
+      return xhttp.responseText;
+    }
+  };
+
+  xhttp.open( "GET", 'http://localhost:8088/getLastCommitTimestamp', true);
+  xhttp.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+  xhttp.send();
+}
