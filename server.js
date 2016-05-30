@@ -839,7 +839,8 @@ server.route({
 
           let setUpdate = new ApbSetUpdate({
             optype: parseInt(request.payload.op),
-            adds: ByteBuffer.fromBinary(Bert.encode(Bert.binary(request.payload.elements)))
+            adds: ByteBuffer.fromBinary(Bert.encode(Bert.binary(request.payload.elements))),
+            rems: ByteBuffer.fromBinary(Bert.encode(Bert.binary(request.payload.elements)))
           });
 
           let antidoteObj = new ApbBoundObject({
