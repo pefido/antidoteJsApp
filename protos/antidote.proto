@@ -82,7 +82,7 @@ message ApbUpdateObjects {
 
 // Start Transaction
 message ApbStartTransaction {
-        required bytes timestamp = 1;
+        required ApbVectorclock timestamp = 1;
         optional ApbTxnProperties properties = 2;
 }
 
@@ -140,9 +140,14 @@ message ApbStaticReadObjectsResp {
 
 //-------------------------------------------------------------------------
 
+// Vectorclocks
+message ApbVectorclock {
+    required bytes value = 1;
+}
+
 // Objects to be read
 message ApbGetObjects {
-        repeated ApbBoundObject boundobjects = 1;
+        repeated ApbBoundObject boundobjects = 2;
 }
 
 // Get object request
@@ -157,11 +162,10 @@ message ApbGetObjectsResp {
     optional uint32 errorcode = 3;
 }
 
-
 // Objects to get log operations for
 message ApbGetLogOperations {
-    required bytes timestamp = 1;
-    repeated ApbBoundObject boundobjects = 2;
+    repeated ApbVectorclock timestamps = 2;
+    repeated ApbBoundObject boundobjects = 3;
 }
 
 // Get log operations request
@@ -174,4 +178,16 @@ message ApbGetLogOperationsResp {
     required bool success = 1;
     repeated ApbLogOperationResp objects = 2;
     optional uint32 errorcode = 3;
+}
+
+//-------------------------------------------------------------------------
+
+//Json request
+message ApbJsonRequest {
+    required bytes value = 1;
+}
+
+//Json reply
+message ApbJsonResp {
+    required bytes value = 1;
 }
