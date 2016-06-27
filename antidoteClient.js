@@ -373,7 +373,8 @@ function updateObjects(key, type, op, elements) {
   var xhttp = new XMLHttpRequest();
   xhttp.onreadystatechange = function() {
     if (xhttp.readyState == 4 && xhttp.status == 200) {
-      console.log(xhttp.responseText);
+      let response = JSON.parse(xhttp.responseText);
+      console.log(response);
       //return xhttp.responseText;
     }
   };

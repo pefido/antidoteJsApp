@@ -672,20 +672,172 @@ function receiveData() {
 
 server.route({
   method: 'GET',
+  path: '/readObjects/{key}/{type}',
+  handler: function (request, reply) {
+    var ByteBuffer = ProtoBuf.ByteBuffer;
+    var builder = ProtoBuf.loadProtoFile("protos/antidote.proto");
+    var builder2 = ProtoBuf.loadProtoFile("protos/riak.proto");
+    var RpbErrorResp = builder2.build("RpbErrorResp");
+    var ApbBoundObject = builder.build("ApbBoundObject");
+    var ApbObjectResp = builder.build("ApbObjectResp");
+    var ApbStartTransaction = builder.build("ApbStartTransaction");
+    var ApbStartTransactionResp = builder.build("ApbStartTransactionResp");
+    var ApbVectorclock = builder.build("ApbVectorclock");
+    var ApbReadObjects = builder.build("ApbReadObjects");
+    var ApbReadObjectsResp = builder.build("ApbReadObjectsResp");
+    var ApbCommitTransaction = builder.build("ApbCommitTransaction");
+    var ApbCommitResp = builder.build("ApbCommitResp");
+    let descriptor;
+
+    let timestamp = new ApbVectorclock({
+      value: ByteBuffer.fromBinary(Bert.encode(Bert.atom("ignore")))
+    });
+
+    let startTransaction = new ApbStartTransaction({
+      timestamp: timestamp
+    });
+
+    /*var antidoteObj = new ApbBoundObject({
+     key: ByteBuffer.fromUTF8(request.params.key),
+     type: parseInt(request.params.type),
+     bucket: ByteBuffer.fromBinary(Bert.encode(Bert.binary("bucket")))
+     });
+
+     let getObjectsReq = new ApbGetObjects({
+     boundobjects: antidoteObj
+     });*/
+
+    var encoded = startTransaction.encode().toBuffer();
+
+    var header = new Buffer(5);
+    header.writeUInt8(119, 4);//1st number is the operation code
+    header.writeInt32BE(encoded.length + 1, 0);
+
+    var message = {
+      header: header,
+      protobuf: encoded
+    };
+
+    let client = net.connect({port: 8087},
+      function() { //'connect' listener
+        client.write(message.header);
+        client.write(message.protobuf);
+      });
+
+    client.on('data', function(data) {
+      console.log("data");
+      var headerResp = data.slice(0, 5);
+      var respNumber = headerResp.readUInt8(4);
+      console.log(respNumber);
+      var protobufResp = data.slice(5, data.length);
+      var decoded;
+      if(respNumber == 0) {
+        decoded = RpbErrorResp.decode(protobufResp);
+        return reply(decoded.errmsg.toUTF8());
+      }
+      else if(respNumber == 128) {
+        decoded = ApbStaticReadObjectsResp.decode(protobufResp);
+        return reply(decoded.objects.objects[0].set.value);
+      }
+      else if(respNumber == 131) {
+        decoded = ApbGetObjectsResp.decode(protobufResp);
+        return reply(decoded.objects[0].value.toUTF8());
+      }
+      else if(respNumber == 124) {
+        decoded = ApbStartTransactionResp.decode(protobufResp);
+        console.log(decoded.success);
+        if(decoded.success) {
+          descriptor = decoded.transaction_descriptor;
+          //console.log(descriptor);
+
+          let antidoteObj = new ApbBoundObject({
+            key: ByteBuffer.fromUTF8(request.params.key),
+            type: parseInt(request.params.type),
+            bucket: ByteBuffer.fromBinary(Bert.encode(Bert.binary("bucket")))
+          });
+
+          let readObjects = new ApbReadObjects({
+            boundobjects: antidoteObj,
+            transaction_descriptor: descriptor
+          });
+
+          encoded = readObjects.encode().toBuffer();
+
+          header = new Buffer(5);
+          header.writeUInt8(116, 4);//1º number is the operation code
+          header.writeInt32BE(encoded.length + 1, 0);
+
+          message = {
+            header: header,
+            protobuf: encoded
+          };
+
+          client.write(message.header);
+          client.write(message.protobuf);
+
+        }
+      }
+      else if(respNumber == 126) {
+        decoded = ApbReadObjectsResp.decode(protobufResp);
+        console.log(decoded);
+
+        let commit = new ApbCommitTransaction({
+          transaction_descriptor: descriptor
+        });
+
+        encoded = commit.encode().toBuffer();
+
+        header = new Buffer(5);
+        header.writeUInt8(121, 4);//1º number is the operation code
+        header.writeInt32BE(encoded.length + 1, 0);
+
+        message = {
+          header: header,
+          protobuf: encoded
+        };
+
+        client.write(message.header);
+        client.write(message.protobuf);
+
+        return reply(decoded.objects[0].set.value.toUTF8());
+      }
+      else if(respNumber == 127) {
+        decoded = ApbCommitResp.decode(protobufResp);
+        lastCommitTimestamp = decoded.commit_time;
+        client.destroy();
+        //return reply(decoded);
+      }
+      //console.log(decoded);
+      //return reply(decoded);
+    });
+
+    client.on('close', function() {
+      console.log('Connection closed');
+    });
+
+    client.on('error', function() {
+      console.log('error');
+    });
+
+  }
+});
+
+
+server.route({
+  method: 'GET',
   path: '/getObjects/{key}/{type}',
   handler: function (request, reply) {
     var ByteBuffer = ProtoBuf.ByteBuffer;
     var builder = ProtoBuf.loadProtoFile("protos/antidote.proto");
     var builder2 = ProtoBuf.loadProtoFile("protos/riak.proto");
     var RpbErrorResp = builder2.build("RpbErrorResp");
-    var ApbStaticReadObjects = builder.build("ApbStaticReadObjects");
     var ApbBoundObject = builder.build("ApbBoundObject");
-    var ApbStaticReadObjectsResp = builder.build("ApbStaticReadObjectsResp");
     var ApbGetObjects = builder.build("ApbGetObjects");
     var ApbGetObjectsResp = builder.build("ApbGetObjectsResp");
-    var ApbObjectResp = builder.build("ApbObjectResp");
+    var ApbJsonRequest = builder.build("ApbJsonRequest");
+    var ApbJsonResp = builder.build("ApbJsonResp");
 
-    var antidoteObj = new ApbBoundObject({
+    /*var antidoteObj = new ApbBoundObject({
       key: ByteBuffer.fromUTF8(request.params.key),
       type: parseInt(request.params.type),
       bucket: ByteBuffer.fromBinary(Bert.encode(Bert.binary("bucket")))
@@ -693,12 +845,28 @@ server.route({
 
     let getObjectsReq = new ApbGetObjects({
       boundobjects: antidoteObj
+    });*/
+
+    let jsonGetReq = {
+        get_objects: [{
+          boundobjects: [{
+            bound_object: [
+              request.params.key,
+              request.params.type,
+              "bucket"
+            ]
+          }]
+        }]
+      };
+
+    let jsonReq = new ApbJsonRequest({
+      value: ByteBuffer.fromUTF8(JSON.stringify(jsonGetReq))
     });
 
-    var encoded = getObjectsReq.encode().toBuffer();
+    var encoded = jsonReq.encode().toBuffer();
 
     var header = new Buffer(5);
-    header.writeUInt8(129, 4);//1st number is the operation code
+    header.writeUInt8(135, 4);//1st number is the operation code
     header.writeInt32BE(encoded.length + 1, 0);
 
     var message = {
@@ -732,8 +900,14 @@ server.route({
       }
       else if(respNumber == 131) {
         decoded = ApbGetObjectsResp.decode(protobufResp);
-        return reply(decoded.objects[0].value.toUTF8());
+        //return reply(decoded.objects[0].value.toUTF8());
+        return reply(decoded);
       }
+      else if(respNumber == 136) {
+        decoded = ApbJsonResp.decode(protobufResp);
+        return reply(decoded.value.toUTF8());
+      }
+
       //console.log(decoded);
       return reply(decoded);
     });
@@ -759,6 +933,7 @@ server.route({
     var builder2 = ProtoBuf.loadProtoFile("protos/riak.proto");
     var RpbErrorResp = builder2.build("RpbErrorResp");
     var ApbStartTransaction = builder.build("ApbStartTransaction");
+    var ApbVectorclock = builder.build("ApbVectorclock");
     var ApbBoundObject = builder.build("ApbBoundObject");
     var ApbUpdateObjects = builder.build("ApbUpdateObjects");
     var ApbUpdateOp = builder.build("ApbUpdateOp");
@@ -766,15 +941,36 @@ server.route({
     var ApbCommitTransaction = builder.build("ApbCommitTransaction");
     var ApbStartTransactionResp = builder.build("ApbStartTransactionResp");
     var ApbCommitResp = builder.build("ApbCommitResp");
+    var ApbJsonRequest = builder.build("ApbJsonRequest");
+    var ApbJsonResp = builder.build("ApbJsonResp");
     var descriptor;
+    let txid;
+
+    var vClock = new ApbVectorclock({
+      value: ByteBuffer.fromBinary(Bert.encode(Bert.atom("ignore")))
+    });
 
     var startTransaction = new ApbStartTransaction({
-      timestamp: ByteBuffer.fromBinary(Bert.encode(Bert.atom("ignore")))
+      timestamp: vClock
     });
-    var encoded = startTransaction.encode().toBuffer();
+
+    let startTX = {
+      start_transaction: [
+        "ignore",
+        {
+          txn_properties: []
+        }
+      ]
+    };
+
+    let startTXJson = new ApbJsonRequest({
+      value: ByteBuffer.fromUTF8(JSON.stringify(startTX))
+    });
+
+    var encoded = startTXJson.encode().toBuffer();
 
     var header = new Buffer(5);
-    header.writeUInt8(119, 4);//1º number is the operation code
+    header.writeUInt8(135, 4);//1º number is the operation code
     header.writeInt32BE(encoded.length + 1, 0);
 
     var message = {
@@ -875,6 +1071,90 @@ server.route({
           client.write(message.protobuf);
 
         }
+      }
+      else if(respNumber == 136) {
+        decoded = JSON.parse(ApbJsonResp.decode(protobufResp).value.toUTF8());
+        console.log(decoded);
+        if(decoded.success.start_transaction_resp){
+          descriptor = decoded.success.start_transaction_resp.txid;
+
+          let updateObjects = {
+            update_objects:
+            [
+              [
+                {
+                  update_op: [
+                    {
+                      bound_object: [
+                        request.payload.key,
+                        request.payload.type,
+                        "bucket"
+                      ]
+                    },
+                    request.payload.op,
+                    {json_value: request.payload.elements}
+                  ]
+                }
+              ],
+              {
+                txid: [
+                  {json_value: descriptor[0].json_value},
+                  descriptor[1]
+                ]
+              }
+            ]
+          };
+
+          let updateJSON = new ApbJsonRequest({
+            value: ByteBuffer.fromUTF8(JSON.stringify(updateObjects))
+          });
+
+          encoded = updateJSON.encode().toBuffer();
+
+          header = new Buffer(5);
+          header.writeUInt8(135, 4);//1º number is the operation code
+          header.writeInt32BE(encoded.length + 1, 0);
+
+          message = {
+            header: header,
+            protobuf: encoded
+          };
+
+          client.write(message.header);
+          client.write(message.protobuf);
+        }
+        else if(decoded.success == 'ok'){
+          let commit = {
+            commit_transaction: {
+              txid: [
+                {json_value: descriptor[0].json_value},
+                descriptor[1]
+              ]
+            }
+          };
+
+          let commitJSON = new ApbJsonRequest({
+            value: ByteBuffer.fromUTF8(JSON.stringify(commit))
+          });
+
+          encoded = commitJSON.encode().toBuffer();
+
+          header = new Buffer(5);
+          header.writeUInt8(135, 4);//1º number is the operation code
+          header.writeInt32BE(encoded.length + 1, 0);
+
+          message = {
+            header: header,
+            protobuf: encoded
+          };
+
+          client.write(message.header);
+          client.write(message.protobuf);
+        }
+        else if(decoded.success.commit_resp){
+          return reply(decoded);
+        }
+        else {return reply(decoded);}
       }
     });
 
