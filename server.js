@@ -943,8 +943,7 @@ server.route({
     var ApbCommitResp = builder.build("ApbCommitResp");
     var ApbJsonRequest = builder.build("ApbJsonRequest");
     var ApbJsonResp = builder.build("ApbJsonResp");
-    var descriptor;
-    let txid;
+    let descriptor;
 
     var vClock = new ApbVectorclock({
       value: ByteBuffer.fromBinary(Bert.encode(Bert.atom("ignore")))
@@ -954,14 +953,50 @@ server.route({
       timestamp: vClock
     });
 
-    let startTX = {
-      start_transaction: [
-        "ignore",
-        {
-          txn_properties: []
-        }
-      ]
-    };
+    let startTX;
+    if(request.payload.vClock){
+      console.log("aqui");
+      startTX = {
+        start_transaction: [
+          {
+            vectorclock: [
+              {
+                dcid_and_time: [
+                  {
+                    dcid: [
+                      request.payload.vClock[0],
+                      request.payload.vClock[1],
+                      request.payload.vClock[2],
+                      request.payload.vClock[3]
+                    ]
+                  },
+                  request.payload.vClock[4]
+                ]
+              }
+            ]
+          },
+          {
+            txn_properties: [
+              [
+                "update_clock",
+                false
+              ]
+            ]
+          }
+        ]
+      };
+    }
+    else {
+      console.log("ali");
+      startTX = {
+        start_transaction: [
+          "ignore",
+          {
+            txn_properties: []
+          }
+        ]
+      };
+    }
 
     let startTXJson = new ApbJsonRequest({
       value: ByteBuffer.fromUTF8(JSON.stringify(startTX))
@@ -1074,9 +1109,10 @@ server.route({
       }
       else if(respNumber == 136) {
         decoded = JSON.parse(ApbJsonResp.decode(protobufResp).value.toUTF8());
-        console.log(decoded);
+        console.log(JSON.stringify(decoded));
         if(decoded.success.start_transaction_resp){
           descriptor = decoded.success.start_transaction_resp.txid;
+          console.log(descriptor);
 
           let updateObjects = {
             update_objects:
@@ -1173,7 +1209,7 @@ server.route({
 
 server.route({
   method: 'GET',
-  path: '/getLogOps/{key}/{type}/{timestamp}',
+  path: '/getLogOps/{key}/{type}/{vClock}',
   handler: function (request, reply) {
     var ByteBuffer = ProtoBuf.ByteBuffer;
     var builder = ProtoBuf.loadProtoFile("protos/antidote.proto");
@@ -1182,9 +1218,11 @@ server.route({
     var ApbGetLogOperations = builder.build("ApbGetLogOperations");
     var ApbGetLogOperationsResp = builder.build("ApbGetLogOperationsResp");
     var ApbLogOperationResp = builder.build("ApbLogOperationResp");
+    var ApbJsonRequest = builder.build("ApbJsonRequest");
+    var ApbJsonResp = builder.build("ApbJsonResp");
 
 
-    let antidoteObj = new ApbBoundObject({
+    /*let antidoteObj = new ApbBoundObject({
       key: ByteBuffer.fromUTF8(request.params.key),
       type: parseInt(request.params.type),
       bucket: ByteBuffer.fromBinary(Bert.encode(Bert.binary("bucket")))
@@ -1193,12 +1231,55 @@ server.route({
     let getLogOps = new ApbGetLogOperations({
       timestamp: lastCommitTimestamp,
       boundobjects: antidoteObj
+    });*/
+
+    let vClock = JSON.parse(request.params.vClock);
+
+    let getLogOps = {
+      get_log_operations: [
+        {
+          timestamps: [
+            {
+              vectorclock: [
+                {
+                  dcid_and_time: [
+                    {
+                      dcid: [
+                        vClock[0],
+                        vClock[1],
+                        vClock[2],
+                        vClock[3]
+                      ]
+                    },
+                    vClock[4]
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          boundobjects: [
+            {
+              bound_object: [
+                request.params.key,
+                request.params.type,
+                "bucket"
+              ]
+            }
+          ]
+        }
+      ]
+    };
+
+    let getLogOpsJSON = new ApbJsonRequest({
+      value: ByteBuffer.fromUTF8(JSON.stringify(getLogOps))
     });
 
-    var encoded = getLogOps.encode().toBuffer();
+    var encoded = getLogOpsJSON.encode().toBuffer();
 
     var header = new Buffer(5);
-    header.writeUInt8(132, 4);//1st number is the operation code
+    header.writeUInt8(135, 4);//1st number is the operation code
     header.writeInt32BE(encoded.length + 1, 0);
 
     var message = {
@@ -1226,6 +1307,11 @@ server.route({
       else if(respNumber == 134) {
         decoded = ApbGetLogOperationsResp.decode(protobufResp);
         return reply(decoded.objects[0].value.toUTF8());
+      }
+      else if(respNumber == 136) {
+        decoded = JSON.parse(ApbJsonResp.decode(protobufResp).value.toUTF8());
+        console.log(decoded);
+        return reply(decoded);
       }
       //console.log(decoded);
       return reply(decoded);
