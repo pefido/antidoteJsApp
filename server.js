@@ -905,6 +905,7 @@ server.route({
       }
       else if(respNumber == 136) {
         decoded = ApbJsonResp.decode(protobufResp);
+        client.destroy();
         return reply(decoded.value.toUTF8());
       }
 
@@ -1017,84 +1018,30 @@ server.route({
     client.write(message.header);
     client.write(message.protobuf);
 
-    client.on('data', function(data) {
-      var headerResp = data.slice(0, 5);
-      var respNumber = headerResp.readUInt8(4);
-      console.log('data ' + respNumber);
-      var protobufResp = data.slice(5, data.length);
-      var decoded;
-      if(respNumber == 0) {
-        decoded = RpbErrorResp.decode(protobufResp);
-        console.log(decoded.errmsg.toUTF8());
-        client.destroy();
-        return decoded.errmsg.toUTF8();
-      }
-      else if(respNumber == 111) {
-        decoded = ApbOperationResp.decode(protobufResp);
-        console.log(decoded);
+      client.on('data', function(data) {
+        var headerResp = data.slice(0, 5);
+        var respNumber = headerResp.readUInt8(4);
+        console.log('data ' + respNumber);
+        var protobufResp = data.slice(5, data.length);
+        var decoded;
+        if(respNumber == 0) {
+          decoded = RpbErrorResp.decode(protobufResp);
+          console.log(decoded.errmsg.toUTF8());
+          client.destroy();
+          return decoded.errmsg.toUTF8();
+        }
+        else if(respNumber == 111) {
+          decoded = ApbOperationResp.decode(protobufResp);
+          console.log(decoded);
 
-        let commit = new ApbCommitTransaction({
-          transaction_descriptor: descriptor
-        });
-
-        encoded = commit.encode().toBuffer();
-
-        header = new Buffer(5);
-        header.writeUInt8(121, 4);//1º number is the operation code
-        header.writeInt32BE(encoded.length + 1, 0);
-
-        message = {
-          header: header,
-          protobuf: encoded
-        };
-
-        client.write(message.header);
-        client.write(message.protobuf);
-
-      }
-      else if(respNumber == 127) {
-        decoded = ApbCommitResp.decode(protobufResp);
-        lastCommitTimestamp = decoded.commit_time;
-        client.destroy();
-        return reply(decoded);
-      }
-      else if(respNumber == 128) {
-        decoded = ApbStaticReadObjectsResp.decode(protobufResp);
-      }
-      else if(respNumber == 124) {
-        decoded = ApbStartTransactionResp.decode(protobufResp);
-        console.log(decoded.success);
-        if(decoded.success) {
-          descriptor = decoded.transaction_descriptor;
-          //console.log(descriptor);
-
-          let setUpdate = new ApbSetUpdate({
-            optype: parseInt(request.payload.op),
-            adds: ByteBuffer.fromBinary(Bert.encode(Bert.binary(request.payload.elements))),
-            rems: ByteBuffer.fromBinary(Bert.encode(Bert.binary(request.payload.elements)))
-          });
-
-          let antidoteObj = new ApbBoundObject({
-            key: ByteBuffer.fromUTF8(request.payload.key),
-            type: parseInt(request.payload.type),
-            bucket: ByteBuffer.fromBinary(Bert.encode(Bert.binary("bucket")))
-          });
-
-          let updateOp = new ApbUpdateOp({
-            boundobject: antidoteObj,
-            optype: 2,//type update, 1=counter, 2=set
-            setop: setUpdate
-          });
-
-          let updateObjects = new ApbUpdateObjects({
-            updates: updateOp,
+          let commit = new ApbCommitTransaction({
             transaction_descriptor: descriptor
           });
 
-          encoded = updateObjects.encode().toBuffer();
+          encoded = commit.encode().toBuffer();
 
           header = new Buffer(5);
-          header.writeUInt8(118, 4);//1º number is the operation code
+          header.writeUInt8(121, 4);//1º number is the operation code
           header.writeInt32BE(encoded.length + 1, 0);
 
           message = {
@@ -1106,93 +1053,161 @@ server.route({
           client.write(message.protobuf);
 
         }
-      }
-      else if(respNumber == 136) {
-        decoded = JSON.parse(ApbJsonResp.decode(protobufResp).value.toUTF8());
-        console.log(JSON.stringify(decoded));
-        if(decoded.success.start_transaction_resp){
-          descriptor = decoded.success.start_transaction_resp.txid;
-          console.log(descriptor);
-
-          let updateObjects = {
-            update_objects:
-            [
-              [
-                {
-                  update_op: [
-                    {
-                      bound_object: [
-                        request.payload.key,
-                        request.payload.type,
-                        "bucket"
-                      ]
-                    },
-                    request.payload.op,
-                    {json_value: request.payload.elements}
-                  ]
-                }
-              ],
-              {
-                txid: [
-                  {json_value: descriptor[0].json_value},
-                  descriptor[1]
-                ]
-              }
-            ]
-          };
-
-          let updateJSON = new ApbJsonRequest({
-            value: ByteBuffer.fromUTF8(JSON.stringify(updateObjects))
-          });
-
-          encoded = updateJSON.encode().toBuffer();
-
-          header = new Buffer(5);
-          header.writeUInt8(135, 4);//1º number is the operation code
-          header.writeInt32BE(encoded.length + 1, 0);
-
-          message = {
-            header: header,
-            protobuf: encoded
-          };
-
-          client.write(message.header);
-          client.write(message.protobuf);
-        }
-        else if(decoded.success == 'ok'){
-          let commit = {
-            commit_transaction: {
-              txid: [
-                {json_value: descriptor[0].json_value},
-                descriptor[1]
-              ]
-            }
-          };
-
-          let commitJSON = new ApbJsonRequest({
-            value: ByteBuffer.fromUTF8(JSON.stringify(commit))
-          });
-
-          encoded = commitJSON.encode().toBuffer();
-
-          header = new Buffer(5);
-          header.writeUInt8(135, 4);//1º number is the operation code
-          header.writeInt32BE(encoded.length + 1, 0);
-
-          message = {
-            header: header,
-            protobuf: encoded
-          };
-
-          client.write(message.header);
-          client.write(message.protobuf);
-        }
-        else if(decoded.success.commit_resp){
+        else if(respNumber == 127) {
+          decoded = ApbCommitResp.decode(protobufResp);
+          lastCommitTimestamp = decoded.commit_time;
+          client.destroy();
           return reply(decoded);
         }
-        else {return reply(decoded);}
-      }
-    });
+        else if(respNumber == 128) {
+          decoded = ApbStaticReadObjectsResp.decode(protobufResp);
+        }
+        else if(respNumber == 124) {
+          decoded = ApbStartTransactionResp.decode(protobufResp);
+          console.log(decoded.success);
+          if(decoded.success) {
+            descriptor = decoded.transaction_descriptor;
+            //console.log(descriptor);
+
+            let setUpdate = new ApbSetUpdate({
+              optype: parseInt(request.payload.op),
+              adds: ByteBuffer.fromBinary(Bert.encode(Bert.binary(request.payload.elements))),
+              rems: ByteBuffer.fromBinary(Bert.encode(Bert.binary(request.payload.elements)))
+            });
+
+            let antidoteObj = new ApbBoundObject({
+              key: ByteBuffer.fromUTF8(request.payload.key),
+              type: parseInt(request.payload.type),
+              bucket: ByteBuffer.fromBinary(Bert.encode(Bert.binary("bucket")))
+            });
+
+            let updateOp = new ApbUpdateOp({
+              boundobject: antidoteObj,
+              optype: 2,//type update, 1=counter, 2=set
+              setop: setUpdate
+            });
+
+            let updateObjects = new ApbUpdateObjects({
+              updates: updateOp,
+              transaction_descriptor: descriptor
+            });
+
+            encoded = updateObjects.encode().toBuffer();
+
+            header = new Buffer(5);
+            header.writeUInt8(118, 4);//1º number is the operation code
+            header.writeInt32BE(encoded.length + 1, 0);
+
+            message = {
+              header: header,
+              protobuf: encoded
+            };
+
+            client.write(message.header);
+            client.write(message.protobuf);
+
+          }
+        }
+        else if(respNumber == 136) {
+          decoded = JSON.parse(ApbJsonResp.decode(protobufResp).value.toUTF8());
+          console.log(JSON.stringify(decoded));
+          if("error" in decoded) {
+            client.destroy();
+            return reply(decoded);
+          }
+          else if("success" in decoded){
+            if(decoded.success == 'ok') {
+              let commit = {
+                commit_transaction: {
+                  txid: [
+                    {json_value: descriptor[0].json_value},
+                    descriptor[1]
+                  ]
+                }
+              };
+
+              console.log(JSON.stringify(commit));
+
+              let commitJSON = new ApbJsonRequest({
+                value: ByteBuffer.fromUTF8(JSON.stringify(commit))
+              });
+
+              encoded = commitJSON.encode().toBuffer();
+
+              header = new Buffer(5);
+              header.writeUInt8(135, 4);//1º number is the operation code
+              header.writeInt32BE(encoded.length + 1, 0);
+
+              message = {
+                header: header,
+                protobuf: encoded
+              };
+
+              client.write(message.header);
+              client.write(message.protobuf);
+            }
+            else if("start_transaction_resp" in decoded.success) {
+              descriptor = decoded.success.start_transaction_resp.txid;
+              console.log(descriptor);
+
+              let updateObjects = {
+                update_objects:
+                  [
+                    [
+                      {
+                        update_op: [
+                          {
+                            bound_object: [
+                              request.payload.key,
+                              request.payload.type,
+                              "bucket"
+                            ]
+                          },
+                          request.payload.op,
+                          {json_value: request.payload.elements}
+                        ]
+                      }
+                    ],
+                    {
+                      txid: [
+                        {json_value: descriptor[0].json_value},
+                        descriptor[1]
+                      ]
+                    }
+                  ]
+              };
+
+              console.log(JSON.stringify(updateObjects));
+
+              let updateJSON = new ApbJsonRequest({
+                value: ByteBuffer.fromUTF8(JSON.stringify(updateObjects))
+              });
+
+              encoded = updateJSON.encode().toBuffer();
+
+              header = new Buffer(5);
+              header.writeUInt8(135, 4);//1º number is the operation code
+              header.writeInt32BE(encoded.length + 1, 0);
+
+              message = {
+                header: header,
+                protobuf: encoded
+              };
+
+              client.write(message.header);
+              client.write(message.protobuf);
+            }
+            else if("commit_resp" in decoded.success) {
+              client.destroy();
+              return reply(decoded);
+            }
+          }
+          else {
+            client.destroy();
+            return reply(decoded);
+          }
+        }
+      });
 
     client.on('close', function() {
       console.log('Connection closed');
