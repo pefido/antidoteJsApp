@@ -397,7 +397,7 @@ function updateObjectsSnapshot(key, type, op, elements, vClock) {
     if (xhttp.readyState == 4 && xhttp.status == 200) {
       let response = JSON.parse(xhttp.responseText);
       console.log(response);
-      //return xhttp.responseText;
+      return response;
     }
   };
 
